@@ -2,9 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QUESTIONS, TOTAL_QUESTIONS, PILLARS } from '@/lib/questions';
-import { getRealtimeClient } from '@/lib/supabaseBrowser';
-
-const STORAGE_KEY = 'bhc.controller.secret';
 
 const STATUS_BADGE = {
   live: { label: 'Live', className: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' },
@@ -13,10 +10,6 @@ const STATUS_BADGE = {
 };
 
 export default function ControllerApp() {
-  const [secret, setSecret] = useState('');
-  const [secretInput, setSecretInput] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authBusy, setAuthBusy] = useState(false);
   const [state, setState] = useState(null);
   const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
@@ -25,98 +18,30 @@ export default function ControllerApp() {
   const stateRef = useRef(null);
   stateRef.current = state;
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (stored) setSecret(stored);
-  }, []);
+  const authHeaders = useCallback(() => ({ 'Content-Type': 'application/json' }), []);
 
-  const authHeaders = useCallback(
-    (key) => ({ 'Content-Type': 'application/json', 'x-controller-secret': key }),
-    []
-  );
-
-  const loadState = useCallback(
-    async (key) => {
-      try {
-        const response = await fetch('/api/controller', { headers: authHeaders(key), cache: 'no-store' });
-        if (response.status === 401) {
-          sessionStorage.removeItem(STORAGE_KEY);
-          setSecret('');
-          setAuthError('That access secret was rejected. Please enter it again.');
-          return;
-        }
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || `Failed to load state (${response.status})`);
-        }
-        const data = await response.json();
-        setState(data);
-        setError('');
-      } catch (err) {
-        setError(err.message || 'Unable to reach the session.');
-      }
-    },
-    [authHeaders]
-  );
-
-  useEffect(() => {
-    if (!secret) return undefined;
-    loadState(secret);
-    const interval = setInterval(() => {
-      setTick((t) => t + 1);
-      loadState(secret);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [secret, loadState]);
-
-  const signIn = async (event) => {
-    event.preventDefault();
-    setAuthBusy(true);
-    setAuthError('');
+  const loadState = useCallback(async () => {
     try {
-      const response = await fetch('/api/controller/verify', {
-        method: 'POST',
-        headers: authHeaders(secretInput.trim()),
-        body: '{}',
-      });
+      const response = await fetch('/api/controller', { cache: 'no-store' });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        setAuthError(data.error || 'Incorrect access secret.');
-        return;
+        throw new Error(data.error || `Failed to load state (${response.status})`);
       }
-      sessionStorage.setItem(STORAGE_KEY, secretInput.trim());
-      setSecret(secretInput.trim());
-      setSecretInput('');
+      setState(await response.json());
+      setError('');
     } catch (err) {
-      setAuthError('Could not reach the server. Check your connection.');
-    } finally {
-      setAuthBusy(false);
+      setError(err.message || 'Unable to reach the session.');
     }
-  };
-
-  const broadcast = useCallback(async (nextState) => {
-    const client = getRealtimeClient();
-    if (!client) return;
-    const channel = client.channel('bhc-session', { config: { broadcast: { self: false } } });
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        channel.send({
-          type: 'broadcast',
-          event: 'session_state',
-          payload: {
-            sessionId: nextState.sessionId,
-            questionIndex: nextState.questionIndex,
-            status: nextState.status,
-            unlockVersion: nextState.unlockVersion,
-            updatedAt: nextState.updatedAt,
-          },
-        });
-        setTimeout(() => client.removeChannel(channel), 1500);
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        client.removeChannel(channel);
-      }
-    });
   }, []);
+
+  useEffect(() => {
+    loadState();
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+      loadState();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [loadState]);
 
   const act = async (action) => {
     const current = stateRef.current;
@@ -127,7 +52,7 @@ export default function ControllerApp() {
     try {
       const response = await fetch('/api/controller', {
         method: 'POST',
-        headers: authHeaders(secret),
+        headers: authHeaders(),
         body: JSON.stringify({ action, expectedVersion: current.unlockVersion }),
       });
       const data = await response.json().catch(() => ({}));
@@ -137,16 +62,9 @@ export default function ControllerApp() {
         setNotice(data.error || 'Another action landed first; state refreshed.');
         return;
       }
-      if (response.status === 401) {
-        sessionStorage.removeItem(STORAGE_KEY);
-        setSecret('');
-        setAuthError('Session expired. Please re-enter the access secret.');
-        return;
-      }
       if (!response.ok) throw new Error(data.error || `Action failed (${response.status})`);
 
       setState(data);
-      broadcast(data);
       setNotice(
         action === 'next'
           ? `Question ${Math.min(data.questionIndex + 1, TOTAL_QUESTIONS)} unlocked for all participants.`
@@ -159,44 +77,6 @@ export default function ControllerApp() {
       setTick((t) => t + 1);
     }
   };
-
-  if (!secret) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-5 py-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-400">Catalygn Edge</p>
-        <h1 className="mt-3 font-serif text-3xl text-white">Controller access</h1>
-        <p className="mt-2 text-sm text-ink-300">Presenter-only interface for the Business Health Check.</p>
-        <form onSubmit={signIn} className="mt-8 space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-ink-200" htmlFor="secret">
-              Access secret
-            </label>
-            <input
-              id="secret"
-              type="password"
-              autoComplete="current-password"
-              className="w-full rounded-xl border border-ink-700 bg-ink-900 px-4 py-3 text-base text-white placeholder:text-ink-500 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-400/30"
-              value={secretInput}
-              onChange={(e) => setSecretInput(e.target.value)}
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-gold-500 px-5 py-3 text-base font-semibold text-ink-950 transition hover:bg-gold-400 disabled:opacity-50"
-            disabled={authBusy || secretInput.trim().length < 8}
-          >
-            {authBusy ? 'Checking…' : 'Unlock controller'}
-          </button>
-          {authError && (
-            <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300" role="alert">
-              {authError}
-            </p>
-          )}
-        </form>
-      </main>
-    );
-  }
 
   const questionIndex = state?.questionIndex ?? 0;
   const question = QUESTIONS[questionIndex];
@@ -216,17 +96,6 @@ export default function ControllerApp() {
             <span className={`rounded-full px-3 py-1 font-semibold ring-1 ${badge.className}`}>{badge.label}</span>
           )}
           <span className="text-ink-400">v{state?.unlockVersion ?? 0}</span>
-          <button
-            type="button"
-            className="rounded-lg px-2 py-1 text-ink-400 hover:text-white"
-            onClick={() => {
-              sessionStorage.removeItem(STORAGE_KEY);
-              setSecret('');
-              setState(null);
-            }}
-          >
-            Sign out
-          </button>
         </div>
       </header>
 
@@ -310,7 +179,7 @@ export default function ControllerApp() {
             </button>
             <button
               type="button"
-              onClick={() => loadState(secret)}
+              onClick={() => loadState()}
               className="rounded-lg border border-ink-800 px-3 py-2 text-xs font-semibold text-ink-300 hover:bg-ink-900"
             >
               Refresh
@@ -321,8 +190,8 @@ export default function ControllerApp() {
             {notice}
           </p>
           <p className="mt-6 text-xs leading-relaxed text-ink-500">
-            Participants see only the current question. Unlocking a question increments the unlock version and broadcasts to
-            every connected participant. Last poll {tick} · state updated{' '}
+            Participants see only the current question. Unlocking increments the unlock version, and participant screens pick
+            it up within a few seconds by polling. Last check {tick} · state updated{' '}
             {state.updatedAt ? new Date(state.updatedAt).toLocaleTimeString('en-IN') : '—'}.
           </p>
         </>

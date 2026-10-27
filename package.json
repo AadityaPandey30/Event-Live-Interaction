@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/"
+    "db:setup": "node scripts/setup-db.mjs",
+    "test": "node --test tests/scoring.test.mjs tests/validation.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

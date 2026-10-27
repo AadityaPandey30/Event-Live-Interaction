@@ -1,5 +1,5 @@
 -- Catalygn Edge Business Health Check schema for Supabase Postgres.
--- Run in Supabase SQL Editor, then enable Realtime on the bhc-session broadcast.
+-- Run this whole file in the Supabase SQL Editor (Dashboard > SQL Editor > New query).
 
 create table if not exists public.bhc_sessions (
   id text primary key,
@@ -47,17 +47,35 @@ create trigger bhc_sessions_touch
 before update on public.bhc_sessions
 for each row execute function public.bhc_touch_updated_at();
 
--- Row Level Security: deny all client access. Only the service role key
--- (used exclusively by server routes) bypasses RLS.
+-- Row Level Security. The server uses either the service role key (bypasses RLS)
+-- or the publishable key (acts as anon). These policies make the publishable key
+-- work from server routes while giving the browser nothing extra: the app never
+-- queries Supabase from the client, and no policy allows reading assessments.
 alter table public.bhc_sessions enable row level security;
 alter table public.bhc_assessments enable row level security;
 
--- No policies are created on purpose: anon and authenticated roles get zero rows,
--- so one participant can never read another participant's data.
-revoke all on public.bhc_sessions from anon, authenticated;
-revoke all on public.bhc_assessments from anon, authenticated;
+grant usage on schema public to anon, authenticated;
+grant select, insert, update on public.bhc_sessions to anon, authenticated;
+-- Insert only: participants can never read another participant's answers.
+grant insert on public.bhc_assessments to anon, authenticated;
 
--- Seed the workshop session used by NEXT_PUBLIC default SESSION_ID.
+drop policy if exists bhc_sessions_read on public.bhc_sessions;
+create policy bhc_sessions_read on public.bhc_sessions
+for select to anon, authenticated using (true);
+
+drop policy if exists bhc_sessions_upsert on public.bhc_sessions;
+create policy bhc_sessions_upsert on public.bhc_sessions
+for insert to anon, authenticated with check (true);
+
+drop policy if exists bhc_sessions_advance on public.bhc_sessions;
+create policy bhc_sessions_advance on public.bhc_sessions
+for update to anon, authenticated using (true) with check (true);
+
+drop policy if exists bhc_assessments_submit on public.bhc_assessments;
+create policy bhc_assessments_submit on public.bhc_assessments
+for insert to anon, authenticated with check (true);
+
+-- Seed the workshop session used by SESSION_ID.
 insert into public.bhc_sessions (id, question_index, status, unlock_version)
 values ('catalygn-edge-workshop-1', 0, 'live', 0)
 on conflict (id) do nothing;

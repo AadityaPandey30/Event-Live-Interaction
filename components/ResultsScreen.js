@@ -64,7 +64,7 @@ function PillarBar({ pillar }) {
 
 const names = (keys) => keys.map((k) => PILLAR_SHORT[k] || k).join(' and ');
 
-export default function ResultsScreen({ profile, answers, results, participantId, sessionId }) {
+export default function ResultsScreen({ profile, answers, results, participantId }) {
   const [submissionId] = useState(() => globalThis.crypto?.randomUUID?.());
   const [status, setStatus] = useState('idle'); // idle | saving | saved | failed
   const [submitError, setSubmitError] = useState('');
@@ -79,7 +79,6 @@ export default function ResultsScreen({ profile, answers, results, participantId
     setStatus('saving');
     setSubmitError('');
     const payload = {
-      sessionId: sessionId || 'unknown',
       submissionId,
       participantId,
       participantName: profile.name,
@@ -108,7 +107,7 @@ export default function ResultsScreen({ profile, answers, results, participantId
     } finally {
       inFlight.current = false;
     }
-  }, [answers, assessedAt, participantId, profile.company, profile.name, results, sessionId, submissionId]);
+  }, [answers, assessedAt, participantId, profile.company, profile.name, results, submissionId]);
 
   useEffect(() => {
     submit();

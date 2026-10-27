@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { requireController, isControllerConfigured } from '@/lib/auth';
 import { advanceSession, readSessionState } from '@/lib/sessionStore';
 import { TOTAL_QUESTIONS } from '@/lib/questions';
 
@@ -10,13 +9,9 @@ const ACTIONS = new Set(['next', 'prev', 'reset', 'pause', 'resume', 'end']);
 
 const noStore = { 'Cache-Control': 'no-store' };
 
-export async function GET(request) {
-  if (!isControllerConfigured()) {
-    return NextResponse.json({ error: 'Controller secret is not configured on the server.' }, { status: 500, headers: noStore });
-  }
-  if (!requireController(request)) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401, headers: noStore });
-  }
+// The /controller route is the presenter screen; whoever holds it controls
+// progression. Keep that URL private rather than layering a login on top.
+export async function GET() {
   try {
     const { state, persisted } = await readSessionState();
     return NextResponse.json(
@@ -29,13 +24,6 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  if (!isControllerConfigured()) {
-    return NextResponse.json({ error: 'Controller secret is not configured on the server.' }, { status: 500, headers: noStore });
-  }
-  if (!requireController(request)) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401, headers: noStore });
-  }
-
   let body;
   try {
     body = await request.json();

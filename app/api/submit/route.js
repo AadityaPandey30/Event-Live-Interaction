@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDb, isDbConfigured } from '@/lib/supabaseAdmin';
 import { validateSubmission } from '@/lib/validation';
 import { computeResults, SCORING_VERSION } from '@/lib/scoring';
+import { SESSION_ID } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,7 +24,7 @@ export async function POST(request) {
     return NextResponse.json({ error: validated.error, fields: validated.fields || [] }, { status: 422, headers: noStore });
   }
 
-  const { sessionId, submissionId, participantId, participantName, companyName, answers } = validated.data;
+  const { submissionId, participantId, participantName, companyName, answers } = validated.data;
   const results = computeResults(answers);
   if (!results.complete) {
     return NextResponse.json(
@@ -39,7 +40,7 @@ export async function POST(request) {
   const row = {
     submission_id: submissionId,
     participant_id: participantId,
-    session_id: sessionId,
+    session_id: SESSION_ID,
     participant_name: participantName,
     company_name: companyName,
     answers,

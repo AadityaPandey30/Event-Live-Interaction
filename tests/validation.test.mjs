@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { validateSubmission, isUuid } from '../lib/validation.js';
 
 const uuid = '3f1d6c8a-0b7e-4a5e-9c1a-2d8f4b6e9a10';
-const answers = Object.fromEntries(Array.from({ length: 15 }, (_, i) => [i + 1, 2]));
+const answers = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 1, 2]));
 const base = {
   submissionId: uuid,
   participantName: 'Asha Rao',
@@ -15,7 +15,7 @@ test('accepts a complete payload', () => {
   const r = validateSubmission(base);
   assert.equal(r.ok, true);
   assert.equal(r.data.participantName, 'Asha Rao');
-  assert.equal(Object.keys(r.data.answers).length, 15);
+  assert.equal(Object.keys(r.data.answers).length, 9);
 });
 
 test('string keys are normalized to numbers', () => {
@@ -26,10 +26,10 @@ test('string keys are normalized to numbers', () => {
 
 test('rejects a missing answer instead of scoring it zero', () => {
   const partial = { ...answers };
-  delete partial[9];
+  delete partial[5];
   const r = validateSubmission({ ...base, answers: partial });
   assert.equal(r.ok, false);
-  assert.match(r.error, /questions: 9/);
+  assert.match(r.error, /questions: 5/);
 });
 
 test('rejects out-of-range answers', () => {
@@ -38,7 +38,7 @@ test('rejects out-of-range answers', () => {
 });
 
 test('rejects unknown answer keys', () => {
-  assert.equal(validateSubmission({ ...base, answers: { ...answers, 16: 1 } }).ok, false);
+  assert.equal(validateSubmission({ ...base, answers: { ...answers, 10: 1 } }).ok, false);
 });
 
 test('rejects a bad submission id, empty names and non-objects', () => {

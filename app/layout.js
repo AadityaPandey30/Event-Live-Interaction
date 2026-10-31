@@ -3,7 +3,7 @@ import './globals.css';
 export const metadata = {
   title: 'Catalygn Edge · Business Health Check',
   description:
-    'A preliminary 15-question self-assessment of your sales, operations and finance systems, by Catalygn Edge.',
+    'A preliminary 9-question self-assessment of your sales, operations and finance systems, by Catalygn Edge.',
   robots: { index: false, follow: false },
 };
 

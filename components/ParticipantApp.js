@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { QUESTIONS, TOTAL_QUESTIONS } from '@/lib/questions';
 import { computeResults } from '@/lib/scoring';
-import { readSessionState } from '@/lib/sessionClient';
 import ResultsScreen from './ResultsScreen';
 
 const emptyProfile = { name: '', company: '' };
@@ -13,9 +12,7 @@ export default function ParticipantApp() {
   const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState({});
   const [viewIndex, setViewIndex] = useState(0);
-  const [waiting, setWaiting] = useState(false);
   const [missing, setMissing] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [finished, setFinished] = useState(false);
   const [participantId] = useState(() => globalThis.crypto?.randomUUID?.() || String(Date.now()));
 
@@ -29,7 +26,7 @@ export default function ParticipantApp() {
     setProfile({ name, company });
     setStarted(true);
     setViewIndex(0);
-    setWaiting(false);
+    setMissing(false);
   };
 
   const question = QUESTIONS[viewIndex] || QUESTIONS[0];
@@ -38,43 +35,24 @@ export default function ParticipantApp() {
   const handleSelect = (value) => {
     setAnswers((prev) => ({ ...prev, [question.number]: value }));
     setMissing(false);
-    setWaiting(false);
   };
 
-  // The only session read: one request per Next press.
-  const handleNext = async () => {
-    if (selected === undefined || checking) {
-      setMissing(selected === undefined);
+  const handleNext = () => {
+    if (selected === undefined) {
+      setMissing(true);
       return;
     }
     setMissing(false);
-    setChecking(true);
-    try {
-      const session = await readSessionState();
-      // On the last question, Q15 being unlocked (index == viewIndex) is enough to submit.
-      const unlocked = viewIndex === TOTAL_QUESTIONS - 1
-        ? session.questionIndex >= viewIndex
-        : session.questionIndex > viewIndex;
-      if (session.status !== 'live' || !unlocked) {
-        setWaiting(true);
-        return;
-      }
-      setWaiting(false);
-      if (viewIndex === TOTAL_QUESTIONS - 1) {
-        setFinished(true);
-      } else {
-        setViewIndex((i) => i + 1);
-      }
-    } catch {
-      setWaiting(true);
-    } finally {
-      setChecking(false);
+    if (viewIndex === TOTAL_QUESTIONS - 1) {
+      setFinished(true);
+    } else {
+      setViewIndex((i) => i + 1);
     }
   };
 
   const handlePrevious = () => {
     if (viewIndex === 0) return;
-    setWaiting(false);
+    setMissing(false);
     setViewIndex((i) => Math.max(0, i - 1));
   };
 
@@ -87,7 +65,7 @@ export default function ParticipantApp() {
             Business Health Check
           </h1>
           <p className="mt-3 text-base leading-relaxed text-ink-600">
-            Fifteen questions on your sales, operations and finance. Aaditya will walk through each one with you.
+            Nine questions on your sales, operations and finance systems.
           </p>
         </div>
 
@@ -143,8 +121,6 @@ export default function ParticipantApp() {
     );
   }
 
-  const lockedCopy = 'Please wait for Aaditya to move to the next question.';
-
   const progressPercent = Math.round(((viewIndex + 1) / TOTAL_QUESTIONS) * 100);
 
   return (
@@ -198,12 +174,6 @@ export default function ParticipantApp() {
           </p>
         )}
 
-        {waiting && (
-          <p className="mt-4 rounded-lg bg-brand-50 px-3 py-3 text-sm font-medium text-brand-800" role="status">
-            {lockedCopy}
-          </p>
-        )}
-
         <div className="mt-auto flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" className="btn-ghost" onClick={handlePrevious} disabled={viewIndex === 0}>
             Previous
@@ -212,9 +182,9 @@ export default function ParticipantApp() {
             type="button"
             className="btn-primary w-full sm:w-auto sm:min-w-[180px]"
             onClick={handleNext}
-            disabled={selected === undefined || checking}
+            disabled={selected === undefined}
           >
-            {checking ? 'Checking…' : waiting ? 'Waiting for Aaditya…' : 'Next'}
+            {viewIndex === TOTAL_QUESTIONS - 1 ? 'View Results' : 'Next'}
           </button>
         </div>
       </section>

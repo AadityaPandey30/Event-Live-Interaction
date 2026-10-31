@@ -3,7 +3,7 @@
 
 create table if not exists public.bhc_sessions (
   id text primary key,
-  question_index integer not null default 0 check (question_index between 0 and 14),
+  question_index integer not null default 0 check (question_index between 0 and 8),
   status text not null default 'live' check (status in ('live', 'paused', 'ended')),
   unlock_version integer not null default 0 check (unlock_version >= 0),
   created_at timestamptz not null default now(),
@@ -21,7 +21,7 @@ create table if not exists public.bhc_assessments (
   sales_score integer not null check (sales_score between 0 and 100),
   operations_score integer not null check (operations_score between 0 and 100),
   finance_score integer not null check (finance_score between 0 and 100),
-  total_points integer not null check (total_points between 0 and 45),
+  total_points integer not null check (total_points between 0 and 27),
   overall_score integer not null check (overall_score between 0 and 100),
   classification text not null,
   weakest_pillar text,
